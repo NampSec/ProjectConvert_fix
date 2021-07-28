@@ -1,3 +1,5 @@
+#从大佬的项目改的，需要安装Jinja2，只支持KEIL，使用方法：python converter.py 项目的根目录（不代表是.uvprojx所在的文件夹）
+
 # Project converter for Embedded Projects
 
 A lot of Embedded Projects use proprietary IDEs and build processes. This make any CI/CD painful. Therefore these simple python scripts allow conversion of existing projects into CMake and corresponding linker file for GCC toolchain. Currently supported are *IAR's ewp* and *ARM's KEIL uvprojx* project formats.

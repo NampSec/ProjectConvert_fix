@@ -3,7 +3,7 @@
 """ CMake generation module
     @file
 """
-
+import re
 import os
 import platform
 import datetime
@@ -11,9 +11,8 @@ from jinja2 import Environment, FileSystemLoader
 
 class CMake (object):
     
-    def __init__(self, project, path):
+    def __init__(self, project):
         
-        self.path = path
         self.project = project
         self.context = {}
         
@@ -27,31 +26,34 @@ class CMake (object):
         fpu = ''
         
         core = ''
-        
-        if 'STM32F0' in self.project['chip']:
+        self.index = os.path.abspath('.')
+        os.chdir(self.project.basedir)
+
+        if 'STM32F0' in self.project.chip[0]:
             core = '-mcpu=cortex-m0'
-        elif 'STM32F1' in self.project['chip']:
+        elif 'STM32F1' in self.project.chip[0]:
             core = '-mcpu=cortex-m3'
-        elif 'STM32F2' in self.project['chip']:
+        elif 'STM32F2' in self.project.chip[0]:
             core = '-mcpu=cortex-m3'
-        elif 'STM32F3' in self.project['chip']:
+        elif 'STM32F3' in self.project.chip[0]:
             core = '-mcpu=cortex-m4'
-        elif 'STM32F4' in self.project['chip']:
+        elif 'STM32F4' in self.project.chip[0]:
             core = '-mcpu=cortex-m4'
-        elif 'STM32F7' in self.project['chip']:
+        elif 'STM32F7' in self.project.chip[0]:
             core = '-mcpu=cortex-m7'
-        elif 'STM32L0' in self.project['chip']:
+        elif 'STM32L0' in self.project.chip[0]:
             core = '-mcpu=cortex-m0plus'
-        elif 'STM32L1' in self.project['chip']:
+        elif 'STM32L1' in self.project.chip[0]:
             core = '-mcpu=cortex-m3'
-        elif 'STM32L4' in self.project['chip']:
+        elif 'STM32L4' in self.project.chip[0]:
             core = '-mcpu=cortex-m4'
-            
+
         cmake['version'] = '3.1'
-        cmake['project'] = self.project['name']
+        cmake['project'] = self.project.name[0]
         cmake['incs'] = []
-        for inc in self.project['incs']:    
-            cmake['incs'].append(inc)    
+        for inc in self.project.include:
+            cmake['incs'].append(os.path.abspath(inc.replace('\\','/')).replace('\\','//'))
+
         cmake['srcs'] = []
 
         i=0
@@ -59,17 +61,15 @@ class CMake (object):
         cmake['files']=[]
         cmake['ass']=[]
         
-        for file in self.project['srcs']:
-            if file.endswith('.c') or file.endswith('.h') or file.endswith('.cpp'):
-                cmake['files'].append({'path': file,'var':'SRC_FILE' + str(i)})  
+        for file in self.project.filepath:
+            if file.endswith('.c') or file.endswith('.h') or file.endswith('.cpp') or file.endswith('.s'):
+                cmake['files'].append({'path': os.path.abspath(file.replace('\\','/')).replace('\\','//'),'var':'SRC_FILE' + str(i)})
                 i = i+1
-            
-        for file in self.project['files']:
-            print ('Assembly added ' + file)
-            cmake['ass'].append({'path': file})  
-            cmake['files'].append({'path': file,'var':'SRC_FILE' + str(i)})
-            i = i+1
-		
+#add stm32fxx.s
+        if self.project.gcc:
+            print (f'Assembly added {self.project.gcc}' )
+            cmake['ass'].append({'path': os.path.abspath(self.project.gcc.replace('\\','/')).replace('\\','//')})
+
         cmake['cxx'] = 'false'
         
         cmake['c_flags'] = '-g -Wextra -Wshadow -Wimplicit-function-declaration -Wredundant-decls -Wmissing-prototypes -Wstrict-prototypes -fno-common -ffunction-sections -fdata-sections -MD -Wall -Wundef -mthumb ' + core + ' ' + fpu
@@ -79,20 +79,20 @@ class CMake (object):
         cmake['asm_flags'] = '-g -mthumb ' + core + ' ' + fpu #+ ' -x assembler-with-cpp'
         cmake['linker_flags'] = '-g -Wl,--gc-sections -Wl,-Map=' + cmake['project'] + '.map -mthumb ' + core + ' ' + fpu
         cmake['linker_script'] = 'STM32FLASH.ld'
-        cmake['linker_path'] = ''  
+        cmake['linker_path'] = ''
+        os.chdir(self.index)
    
-        self.linkerScript('STM32FLASH.ld',os.path.join(self.path,'STM32FLASH.ld'))
+        self.linkerScript('STM32FLASH.ld',os.path.join(self.project.path,'STM32FLASH.ld'))
         
-        cmake['oocd_target'] = 'stm32f3x'
-        cmake['defines'] = []
-        for define in self.project['defs']:
-            cmake['defines'].append(define)
+        cmake['oocd_target'] = self.project.chip[0]
+        cmake['defines'] = list(self.project.define)
+
             
         cmake['libs'] = []
         
         self.context['cmake'] = cmake
         
-        abspath = os.path.abspath(os.path.join(self.path,'CMakeLists.txt'))
+        abspath = os.path.abspath(os.path.join(self.project.path,'CMakeLists.txt'))
         self.generateFile('CMakeLists.txt', abspath)
 
         print ('Created file CMakeLists.txt [{}]'.format(abspath))
@@ -134,9 +134,18 @@ class CMake (object):
             pathDst = pathSrc
             
         self.context['file'] = os.path.basename(str(pathSrc))
-        self.context['flash'] = '64'
-        self.context['ram'] = '8'        
-        
+        romsize = re.findall(r'IROM\((.*?)\)',self.project.mens[0])
+        ramsize = re.findall(r'IRAM\((.*?)\)',self.project.mens[0])
+        if '-' in romsize:
+             romsizes = eval(romsize[0])
+             ramsizes = eval(ramsize[0])
+        else:
+            print('your are using KEIL V5')
+            romsizes = int((re.findall(r'\,(.*)',romsize[0]))[0],base=16)
+            ramsizes = int((re.findall(r'\,(.*)',ramsize[0]))[0],base=16)
+
+        self.context['flash'] = round(abs(romsizes) / 1024)
+        self.context['ram'] = round(abs(ramsizes) / 1024)
         env = Environment(loader=FileSystemLoader(template_dir),trim_blocks=True,lstrip_blocks=True)
         template = env.get_template(str(pathSrc))
         
@@ -154,5 +163,4 @@ class CMake (object):
         else:
             # Different OS than Windows or Linux            
             pass
-        
-        
+
