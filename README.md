@@ -1,8 +1,5 @@
 # ProjectConvert_fix
-能用就行
+能用就行，本人PYTHON初学者，可能有很多bug
 修改自：https://github.com/phodina/ProjectConverter
-注意要在.uvprojx所在文件夹的上一个文件夹作为参数
-例如：
-test.uvprojx在C:\Users\Administrator\Desktop\Template\USER
-应该输入python .\convert.py uvprojx C:\Users\Administrator\Desktop\Template
-(最后不要加'\')
+#从大佬的项目改的，需要安装Jinja2，只支持KEIL，使用方法：python converter.py 项目的根目录（重要）
+#再右键，将文件夹作为Clion项目打开即可
